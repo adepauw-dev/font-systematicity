@@ -1,5 +1,7 @@
 from itertools import combinations
 from distance import EuclideanDistance, EditDistance
+import data
+from data import SoundDistance
 
 """ Sonorant, Consonantal, Voice, Nasal, Degree, Labial, Palatal, Pharyngeal, Round, Tongue, Radical, """
 phonemes = {
@@ -38,8 +40,61 @@ def get_phonetic_distances():
         phoneme1 = phonemes[char1]
         phoneme2 = phonemes[char2]
 
-        edit_distance = EditDistance.get_distance(phoneme1, phoneme2)
+        hamming_distance = EditDistance.get_distance(phoneme1, phoneme2)
+
         euclidean_distance = EuclideanDistance.get_distance(phoneme1, phoneme2)
-        distances[(char1, char2)] = (edit_distance, euclidean_distance)
+
+        edit_distance = 0
+
+        sum_distance = 0
+
+        for i in range(len(phoneme1)):
+            if (phoneme1[i] != phoneme2[i]):
+                edit_distance += 1
+            sum_distance += abs(phoneme1[i] - phoneme2[i])
+
+        distances[(char1, char2)] = (hamming_distance, euclidean_distance, edit_distance, sum_distance)
 
     return distances
+
+def calculate_sound_distances():
+    sound_distances = get_phonetic_distances()
+    distance_objects = []
+    for key, item in sound_distances.items():
+        sound_distance = SoundDistance(
+            char1 = key[0],
+            char2 = key[1],
+            metric = "Hamming",
+            distance = item[0]
+        )
+        distance_objects.append(sound_distance)
+        
+        sound_distance = SoundDistance(
+            char1 = key[0],
+            char2 = key[1],
+            metric = "Euclidean",
+            distance = item[1]
+        )
+        distance_objects.append(sound_distance)
+        
+        sound_distance = SoundDistance(
+            char1 = key[0],
+            char2 = key[1],
+            metric = "Edit",
+            distance = item[2]
+        )
+        distance_objects.append(sound_distance)
+        
+        sound_distance = SoundDistance(
+            char1 = key[0],
+            char2 = key[1],
+            metric = "Edit_Sum",
+            distance = item[3]
+        )
+        distance_objects.append(sound_distance)    
+
+    with data.db.atomic():
+        SoundDistance.bulk_create(distance_objects, batch_size=100)
+
+if __name__ == "__main__":
+    calculate_sound_distances()

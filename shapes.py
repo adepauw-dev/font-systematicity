@@ -7,6 +7,9 @@ import numpy as np
 from ft_structs_mm import FT_MM_VarPtr
 from distance import HaussdorffDistance
 
+# Factor for integer/16-bit fixed point number conversion
+FIXED_16_BIT = 65536
+
 """
     Renders monochrome bitmap glyphs and associated metrics using the FreeType
     typography library. Includes support for OpeType font variations.
@@ -24,9 +27,9 @@ class GlyphRenderer:
                 axis = self._variations.contents.axis[i]
                 if axis is None:
                     break
-                    
+
                 font_axis = FontAxis(
-                    axis.name, axis.tag, axis.minimum, axis.maximum)
+                    axis.name.decode('utf-8'), axis.tag, axis.minimum/FIXED_16_BIT, axis.maximum/FIXED_16_BIT, getattr(axis, 'def')/FIXED_16_BIT)
                 self._axes.append(font_axis)
     
     """
@@ -38,7 +41,7 @@ class GlyphRenderer:
         return self.render(char)
 
     """
-        Renders a monochrome characer bitmap using the specified size and 
+        Renders a monochrome character bitmap using the specified size and 
         optional variable font coordinates.
     """
     def bitmaps(self, chars, size, coords):
@@ -58,9 +61,10 @@ class GlyphRenderer:
         self._face.set_char_size(size*64)
         
         if coords is not None:
-            coords_type = freetype.FT_Fixed * len(coords)
-            ft_coords = coords_type(*coords)
-            freetype.FT_Set_Var_Design_Coordinates(self._face._FT_Face, len(coords), ft_coords)
+            fixed = [int(coord*FIXED_16_BIT) for coord in coords]
+            coords_type = freetype.FT_Fixed * len(fixed)
+            ft_coords = coords_type(*fixed)
+            freetype.FT_Set_Var_Design_Coordinates(self._face._FT_Face, len(fixed), ft_coords)
 
     """
         Render glyph bitmap and return with positioning metrics.
@@ -141,6 +145,7 @@ class FontAxis(NamedTuple):
     tag: str
     minimum: int
     maximum: int
+    default: int
 
 class GlyphBitmap(NamedTuple):
     """Class to represent a rasterized glpyh and its metrics. """
@@ -159,7 +164,7 @@ def hausdorff_distance(bitmap1, bitmap2):
     
     # Return haussdorff distancs and the contributing point coordinates
     return ((hauss[0][0], points1[hauss[0][1]], points2[hauss[0][2]]), (hauss[1][0], points2[hauss[1][1]], points1[hauss[1][2]]))
-    
+
 def get_points(bitmap):
     points = []
     for i in range(bitmap.shape[0]):

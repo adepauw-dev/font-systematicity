@@ -142,4 +142,4 @@ dmypy.json
 
 
 img/*
-backup/*
+data/*

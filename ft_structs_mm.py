@@ -1,6 +1,6 @@
 """
     These types are wrappers to FreeType structs not currently supported
-    in freetype-py as of v2.1.0.post1. Code concentions for this file follow
+    in freetype-py as of v2.1.0.post1. Code conventions for this file follow
     those of freetype-py for possible inclusion in future PR.
 
     Structs are documented at

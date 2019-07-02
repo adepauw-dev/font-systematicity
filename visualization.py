@@ -4,6 +4,9 @@ import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
 import numpy as np
 
+"""
+    Save a bitmap image to file.
+"""
 def save_image(bitmap, name, path=".\\img\\"):
     plt.axis("off")
     save_path = os.path.join(path, name) + ".png"
@@ -11,11 +14,28 @@ def save_image(bitmap, name, path=".\\img\\"):
     plt.savefig(save_path)
     #plt.imsave(save_path, bitmap, cmap=plt.cm.gray)
 
+"""
+    Display a bitmap image.
+"""
 def show_image(bitmap):
     plt.axis("off")
     plt.imshow(bitmap, interpolation="nearest", cmap=plt.cm.gray, origin="upper")
     plt.show()
 
+"""
+    Combine a set of bitmaps into a single image
+"""
+def render_image_set(bitmaps, title):
+    plt.clf()
+    bitmap = np.concatenate(bitmaps, axis=1)
+    bitmap = np.dstack([bitmap, bitmap, bitmap])
+    plt.title(title)
+    return bitmap
+
+"""
+    Display a pair of glyphs and their hausdorff distances, highlighting the key
+    contributing points.
+"""
 def render_image_pair(char1, char2, bitmap1, bitmap2, points1, points2, dist1, dist2):
     plt.clf()
     bitmap = np.concatenate((bitmap1, bitmap2), axis=1)
@@ -32,8 +52,8 @@ def render_image_pair(char1, char2, bitmap1, bitmap2, points1, points2, dist1, d
            ncol=2, mode="expand", borderaxespad=0.)
 
     if points1 is not None:
-        bitmap[points1[0][0], points1[0][1], :] = [1, 0, 0]
-        bitmap[points1[1][0], points1[1][1], :] = [0, 1, 1]
+        bitmap[points1[0][0], points1[0][1]] = [1, 0, 0]
+        bitmap[points1[1][0], points1[1][1]] = [0, 1, 1]
 
         draw_arrow(points1[0][1], points1[0][0], mid_x, mid_y, "red")
         draw_arrow(points1[1][1], points1[1][0], mid_x, mid_y, "cyan")
@@ -41,14 +61,17 @@ def render_image_pair(char1, char2, bitmap1, bitmap2, points1, points2, dist1, d
     if points2 is not None:
         # Adjust column of second bitmap by width of first
         new_points2 = [(p[0], p[1] + bitmap1.shape[1]) for p in points2]
-        bitmap[new_points2[0][0], new_points2[0][1], :] = [1, 0, 0]
-        bitmap[new_points2[1][0], new_points2[1][1], :] = [0, 1, 1]
+        bitmap[new_points2[0][0], new_points2[0][1]] = [1, 0, 0]
+        bitmap[new_points2[1][0], new_points2[1][1]] = [0, 1, 1]
 
         draw_arrow(new_points2[0][1], new_points2[0][0], mid_x, mid_y, "red")
         draw_arrow(new_points2[1][1], new_points2[1][0], mid_x, mid_y, "cyan")
     
     return bitmap
 
+"""
+    Draw an arrow on an image using pyplot
+"""
 def draw_arrow(x, y, mid_x, mid_y, color):
     x_dir = 1 if x < mid_x else -1
     y_dir = 1 if y < mid_y else -1
