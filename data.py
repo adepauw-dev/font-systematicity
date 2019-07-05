@@ -58,9 +58,20 @@ class Correlation(BaseModel):
     r_value = FloatField()
     p_value = FloatField()
 
+class Experiment(BaseModel):
+    name = CharField()
+    method = CharField()
+    start_time = DateTimeField(null=True)
+    end_time = DateTimeField(null=True)
+    hyperparameters = CharField(max_length=1000, null=True)
+
+class ExperimentGlyphSet(BaseModel):
+    experiment = ForeignKeyField(Experiment)
+    glyph_set = ForeignKeyField(GlyphSet)
+
 def create():
     db.connect()
-    db.create_tables([Font, GlyphSet, Glyph, ShapeDistance, SoundDistance, Correlation])
+    db.create_tables([Font, GlyphSet, Glyph, ShapeDistance, SoundDistance, Correlation, Experiment, ExperimentGlyphSet])
     db.close()
 
 if __name__ == "__main__":

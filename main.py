@@ -43,16 +43,20 @@ if __name__ == "__main__":
     chars = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "v", "w", "y", "z"]
     
     data.db.connect()
-    fonts = Font.select().where(Font.name == 'DecovarAlpha-VF')
+    fonts = Font.select().where(Font.is_variable == True)
+    #fonts = Font.select().where(Font.name == "VotoSerifGX")
+
+    # Run an experiment using random search
+    experiments.random_search(chars, fonts, [12, 24], 250)
     
-    experiments.simulated_annealing(chars, fonts, [12], .02, 2)
-
-
+    # Run an experiment using simulated annealing
+    experiments.simulated_annealing(chars, fonts, [12, 24], .02, 250)
+    
+    # # Run an experiment using grid search
+    # experiments.grid_search(chars, fonts, [12, 24], 5)
+    
     # """ Evaluate a font, overwriting data """
     # systematicity.evaluate(chars, fonts[0], 96, None, True)
-    
-    # """ Perform a random search for optimal coordinates of a variable font """
-    # random_search(chars, fonts, [12], 100)
     
     # """ Generate an image illustrating the hausdorff image of the first two glyphs in a glyph set """
     # print_hausdorff_distance(388)

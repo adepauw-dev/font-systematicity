@@ -1,11 +1,19 @@
+from  datetime import datetime
 import io
+import json
 import math
 import random
+from enum import Enum
 
 import data
-from data import Font
+from data import Font, Experiment, ExperimentGlyphSet
 import shapes
 import systematicity
+
+class ExperimentType(Enum):
+    GridSearch = "grid"
+    RandomSearch = "random"
+    SimulatedAnnealing = "simulated annealing"
 
 """
     Evaluate the systematicity in sound-shape correlation for a set of fonts
@@ -27,7 +35,7 @@ def get_grid_coords(minimum, maximum, points):
         raise Exception("Minimum must be less than or equal maximum")
         
     interval = (maximum - minimum) / (points - 1)
-    return [int(interval * i + minimum) for i in range(points)]
+    return [round(interval * i + minimum, 4) for i in range(points)]
 
 """
     Generates the number of randomly selected points for the specified
@@ -38,7 +46,7 @@ def get_random_coords(axes, num_points):
     for i in range(num_points):
         coords = []
         for axis in axes:
-            coords.append(random.uniform(axis.minimum, axis.maximum))
+            coords.append(round(random.uniform(axis.minimum, axis.maximum), 4))
         points.append(coords)
     return points
 
@@ -50,20 +58,42 @@ def get_random_coords(axes, num_points):
 def grid_search(chars, fonts, font_sizes, grid_count):
     for font in fonts:
         for font_size in font_sizes:
-            renderer = shapes.GlyphRenderer(font.font_file)
-            
+            experiment_name = "Grid: {0} size {1}, {2} facets.".format(font.name, font_size, grid_count)
+            experiment = Experiment(
+                name = experiment_name,
+                method = ExperimentType.GridSearch,
+                start_time = datetime.now(),
+                hyperparameters = json.dumps({"facets":grid_count}))
+            experiment.save()
+            print(experiment_name)
+        
+            renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
             defaults = [axis.default for axis in renderer._axes]
+            best_corr = 0.0
+
             for index in range(len(renderer._axes)):
                 axis = renderer._axes[index]
-                
                 vals = get_grid_coords(axis.minimum, axis.maximum, grid_count)
-                
+                best_axis_corr = 0.0
+
                 for idx, val in enumerate(vals):
                     coords = defaults.copy()
                     coords[index] = val
                     
-                    print("Calculating {0} pt {1} for {2} value of {3}...".format(font_size, font.name, axis.name, val))
-                    systematicity.evaluate(chars, font, font_size, coords)
+                    result = systematicity.evaluate(chars, font, font_size, coords)
+                    save_result(experiment.id, result)
+                    
+                    print("Corr {0:.4f} for {1} pt {2} for {3} value of {4}".format(result.edit_correlation, font_size, font.name, axis.name, val))
+                    if result.edit_correlation > best_axis_corr:
+                        best_axis_corr = result.edit_correlation
+                    if result.edit_correlation > best_corr:
+                        best_corr = result.edit_correlation
+            
+                print("Best corr: {0:.4f} for axis {1}".format(best_axis_corr, axis.name))
+            
+            print("Best corr: {0:.4f}".format(best_corr))
+            experiment.end_time = datetime.now()
+            experiment.save()
 
 """
     Perform a random search over the possible values of each font's axes.
@@ -72,16 +102,36 @@ def grid_search(chars, fonts, font_sizes, grid_count):
 def random_search(chars, fonts, font_sizes, num_points):
     for font in fonts:
         for font_size in font_sizes:
-            renderer = shapes.GlyphRenderer(font.font_file)
+            experiment_name = "Random: {0} size {1}, {2} points.".format(font.name, font_size, num_points)
+            experiment = Experiment(
+                name = experiment_name,
+                method = ExperimentType.RandomSearch,
+                start_time = datetime.now(),
+                hyperparameters = json.dumps({"points":num_points}))
+            experiment.save()
+            print(experiment_name)
+
+            renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
 
             points = get_random_coords(renderer._axes, num_points)
             # Include min and max
             points.insert(0, [axis.minimum for axis in renderer._axes])
             points.append([axis.maximum for axis in renderer._axes])
 
+            best_corr = 0.0
+
             for point in points:
-                print("Calculating {0} pt {1} with coords {2}...".format(font_size, font.name, point))
-                systematicity.evaluate(chars, font, font_size, point)
+                result = systematicity.evaluate(chars, font, font_size, point)
+                save_result(experiment.id, result)
+
+                print("Corr: {0:.4f} for {1} pt {2} with coords {3}...".format(result.edit_correlation, font_size, font.name, point))
+                if result.edit_correlation > best_corr:
+                    best_corr = result.edit_correlation
+            
+            print("Best corr: {0:.4f}".format(best_corr))
+
+            experiment.end_time = datetime.now()
+            experiment.save()
 
 """
    Simulated annealing algorithm for finding optimal coordinates. 
@@ -89,42 +139,59 @@ def random_search(chars, fonts, font_sizes, num_points):
 def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
     for font in fonts:
         for font_size in font_sizes:
-            print("Experiment: font {0} size {1}".format(font.name, font_size))
+            experiment_name = "Simulated Annealing: {0} size {1}, initial temp {2}, {3} iterations.".format(font.name, font_size, initial_temperature, time)
+            experiment = Experiment(
+                name = experiment_name,
+                method = ExperimentType.SimulatedAnnealing,
+                start_time = datetime.now(),
+                hyperparameters = json.dumps({"temp":initial_temperature, "iterations":time}))
+            experiment.save()
+
+            print(experiment_name)
             temperature = initial_temperature
             renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
-            candidate = get_random_coords(renderer._axes, 1)
-
+            candidate = get_random_coords(renderer._axes, 1)[0]
+            
             result = systematicity.evaluate(chars, font, font_size, candidate)
+            save_result(experiment.id, result)
+            corr = result.edit_correlation
+            
             iteration = 1
             
             best_candidate = candidate
-            best_result = result
+            best_corr = corr
             best_iteration = iteration
 
-            print("Staring at {0}, {1}".format(best_candidate, best_result))
+            print("Starting at {0}, {1}".format(best_candidate, best_corr))
 
             while iteration < time and temperature > 0:
                 new_candidate = convolve_gaussian(candidate, renderer._axes, .05)
-                new_result = systematicity.evaluate(chars, font, font_size, new_candidate)
+                
+                result = systematicity.evaluate(chars, font, font_size, new_candidate)
+                save_result(experiment.id, result)
+                new_corr = result.edit_correlation
                 
                 p = random.uniform(0.0, 1.0)
-                if new_result > result or math.exp((new_result - result)/temperature) > p:
-                    print("{0:3d} MOVE: {1:.4f}, {2:.4f} > {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_result, math.exp((new_result - result)/temperature), p, temperature, new_candidate))
+                if new_corr > corr or math.exp((new_corr - corr)/temperature) > p:
+                    print("{0:3d} MOVE: {1:.4f}, {2:.4f} > {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp((new_corr - corr)/temperature), p, temperature, new_candidate))
                     
                     candidate = new_candidate
-                    result = new_result                    
+                    corr = new_corr                
                 else:
-                    print("{0:3d} STAY: {1:.4f}, {2:.4f} <= {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_result, math.exp((new_result - result)/temperature), p, temperature, new_candidate))
+                    print("{0:3d} STAY: {1:.4f}, {2:.4f} <= {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp((new_corr - corr)/temperature), p, temperature, new_candidate))
 
-                if result > best_result:                    
-                    best_result = result
+                if corr > best_corr:                    
+                    best_corr = corr
                     best_candidate = candidate
                     best_iteration = iteration
 
                 iteration += 1
                 temperature = initial_temperature * (1 - iteration/time)
     
-            print("Best candidate for {0} size {1} in iteration {2}: {3:.4f}, {4}".format(font.name, font_size, best_iteration, best_result, best_candidate))
+            print("Best candidate for {0} size {1} in iteration {2}: {3:.4f}, {4}".format(font.name, font_size, best_iteration, best_corr, best_candidate))
+            
+            experiment.end_time = datetime.now()
+            experiment.save()
 
 """
     Randomly convolve the set of axis coordinates uniformly bounded by the 
@@ -144,7 +211,7 @@ def convolve_uniform(coords, axes, step_range):
         conv_range = (axis_range * step_range)
         
         while True:
-            new_coord = coord + random.uniform(-conv_range, conv_range)
+            new_coord = round(coord + random.uniform(-conv_range, conv_range), 4)
             if new_coord >= axis.minimum and new_coord <= axis.maximum:
                 break
 
@@ -177,13 +244,17 @@ def convolve_gaussian(coords, axes, var_range):
         variance = axis_range * var_range
         
         while True:
-            new_coord = coord + random.gauss(0, variance)
+            new_coord = round(coord + random.gauss(0, variance), 4)
             if new_coord >= axis.minimum and new_coord <= axis.maximum:
                 break
 
         new_coords.append(new_coord)
 
     return new_coords
+
+def save_result(experiment_id, systematicity_result):
+    join = ExperimentGlyphSet(experiment_id=experiment_id, glyph_set_id=systematicity_result.glyph_set_id)
+    join.save()
 
 if __name__ == "__main__":
     font = Font.select().where(Font.name == 'amstelvar-roman').first()

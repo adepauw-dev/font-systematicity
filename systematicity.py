@@ -1,6 +1,7 @@
 import io
-import json
 from itertools import combinations
+import json
+from typing import NamedTuple
 
 from scipy.stats.stats import pearsonr
 from peewee import DoesNotExist
@@ -198,13 +199,26 @@ def get_correlation(glyph_set_id, sound_metric, shape_metric):
 def evaluate(chars, font, font_size, coords=None, overwrite=False):
     if (overwrite):
         delete_glyph_set(chars, font, font_size, coords)
-
+    
     glyph_set_id = get_glyphs(chars, font, font_size, coords)
     
     get_shape_distances(glyph_set_id)
 
-    get_correlation(glyph_set_id, "Euclidean", "hausdorff")
-    get_correlation(glyph_set_id, "Edit_Sum", "hausdorff")
-    corr = get_correlation(glyph_set_id, "Edit", "hausdorff")
+    euclidean_corr = get_correlation(glyph_set_id, "Euclidean", "hausdorff")
+    edit_sum_corr = get_correlation(glyph_set_id, "Edit_Sum", "hausdorff")
+    edit_corr = get_correlation(glyph_set_id, "Edit", "hausdorff")
     
-    return corr.r_value
+    return SystematicityResult(
+        glyph_set_id = glyph_set_id,
+        edit_correlation = edit_corr.r_value,
+        edit_sum_correlation = edit_sum_corr.r_value,
+        euclidean_correlation = euclidean_corr.r_value
+    )
+
+class SystematicityResult(NamedTuple):
+    """Class to represent the results of a systematiciy evaluation. """
+    glyph_set_id: int
+    edit_correlation: float
+    edit_sum_correlation: float
+    euclidean_correlation: float
+    
