@@ -51,9 +51,9 @@ def get_glyphs(chars, font, size, coords=None):
                         GlyphSet.chars == chars_serial)
                     .execute())
     if len(glyph_sets) > 0:
-        return glyph_sets.first().id
+        return glyph_sets[0].id
 
-    renderer = shapes.GlyphRenderer(font.font_file)
+    renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
     bitmaps = renderer.bitmaps(chars, size, coords)
 
     glyph_set = GlyphSet(font=font, size=size, coords=coords_serial, chars=chars_serial)
@@ -192,6 +192,8 @@ def get_correlation(glyph_set_id, sound_metric, shape_metric):
     size, and variation coordinates specified. Renders and saves a set of glyphs,
     measures their visual distances, and calculates the correlation between their
     visual (shape) and phonological (sound) distances, using a variety of measures.
+
+    This method returns only the correlation using the Edit distance.
 """
 def evaluate(chars, font, font_size, coords=None, overwrite=False):
     if (overwrite):
@@ -202,5 +204,7 @@ def evaluate(chars, font, font_size, coords=None, overwrite=False):
     get_shape_distances(glyph_set_id)
 
     get_correlation(glyph_set_id, "Euclidean", "hausdorff")
-    get_correlation(glyph_set_id, "Edit", "hausdorff")
     get_correlation(glyph_set_id, "Edit_Sum", "hausdorff")
+    corr = get_correlation(glyph_set_id, "Edit", "hausdorff")
+    
+    return corr.r_value

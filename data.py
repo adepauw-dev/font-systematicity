@@ -14,13 +14,6 @@ class PickleBlobField(BlobField):
     def python_value(self, value):
         return value if value is None else pickle.loads(value)
 
-class BlobStreamField(BlobField):
-    def db_value(self, value):
-        return value
-    
-    def python_value(self, value):
-        return io.BytesIO(value)
-
 class BaseModel(Model):
     class Meta:
         database = db
@@ -28,7 +21,7 @@ class BaseModel(Model):
 class Font(BaseModel):
     name = CharField()
     file_name = CharField()
-    font_file = BlobStreamField()
+    font_file = BlobField()
     is_variable = BitField()
     is_serif = BitField()
     axes = CharField(max_length=1000, null=True)
