@@ -160,10 +160,17 @@ def hausdorff_distance(bitmap1, bitmap2):
     points1 = get_points(bitmap1)
     points2 = get_points(bitmap2)
     
+    if len(points1) == 0 or len(points2) == 0:
+        # One glyph or the other has failed to render at all. 
+        # This can happen at very small resolutions, particularly for unusual
+        # variable designs at unexpected coordinates.
+        return None
+
     hauss = HaussdorffDistance.get_distance(points1, points2)
     
     # Return haussdorff distancs and the contributing point coordinates
-    return ((hauss[0][0], points1[hauss[0][1]], points2[hauss[0][2]]), (hauss[1][0], points2[hauss[1][1]], points1[hauss[1][2]]))
+    return ((hauss[0][0], points1[hauss[0][1]], points2[hauss[0][2]]), 
+            (hauss[1][0], points2[hauss[1][1]], points1[hauss[1][2]]))
 
 def get_points(bitmap):
     points = []

@@ -113,7 +113,9 @@ def get_shape_distances(glyph_set_id):
         bitmap_2 = glyph_2.bitmap
         
         haus = shapes.hausdorff_distance(bitmap_1, bitmap_2)
-        
+        if haus is None:
+            raise FailedRenderException("Unable to determine distance and correlation because at least one glyph failed to render.")
+
         contrib_points1 = json.dumps([haus[0][1], haus[1][2]])
         contrib_points2 = json.dumps([haus[0][2], haus[1][1]])
         
@@ -201,7 +203,7 @@ def evaluate(chars, font, font_size, coords=None, overwrite=False):
         delete_glyph_set(chars, font, font_size, coords)
     
     glyph_set_id = get_glyphs(chars, font, font_size, coords)
-    
+
     get_shape_distances(glyph_set_id)
 
     euclidean_corr = get_correlation(glyph_set_id, "Euclidean", "hausdorff")
@@ -221,4 +223,7 @@ class SystematicityResult(NamedTuple):
     edit_correlation: float
     edit_sum_correlation: float
     euclidean_correlation: float
-    
+
+class FailedRenderException(Exception):
+    """Exception for when a glyph renders with no pixels"""
+    pass

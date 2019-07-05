@@ -80,7 +80,13 @@ def grid_search(chars, fonts, font_sizes, grid_count):
                     coords = defaults.copy()
                     coords[index] = val
                     
-                    result = systematicity.evaluate(chars, font, font_size, coords)
+                    try:
+                        result = systematicity.evaluate(chars, font, font_size, coords)
+                    except FailedRenderException:
+                        # ignore failed render and carry on
+                        print("Failed render at point {0}".format(coords))
+                        continue
+
                     save_result(experiment.id, result)
                     
                     print("Corr {0:.4f} for {1} pt {2} for {3} value of {4}".format(result.edit_correlation, font_size, font.name, axis.name, val))
@@ -120,14 +126,22 @@ def random_search(chars, fonts, font_sizes, num_points):
 
             best_corr = 0.0
 
+            iteration = 1
             for point in points:
-                result = systematicity.evaluate(chars, font, font_size, point)
+                try:
+                    result = systematicity.evaluate(chars, font, font_size, point)
+                except systematicity.FailedRenderException:
+                        # ignore failed render and carry on to next point
+                        print("{0} Failed render at point {1}".format(iteration, point))
+                        continue
                 save_result(experiment.id, result)
 
-                print("Corr: {0:.4f} for {1} pt {2} with coords {3}...".format(result.edit_correlation, font_size, font.name, point))
+                print("{0} Corr: {1:.4f} for {2} pt {3} with coords {4}...".format(
+                    iteration, result.edit_correlation, font_size, font.name, point))
                 if result.edit_correlation > best_corr:
                     best_corr = result.edit_correlation
-            
+
+                iteration += 1
             print("Best corr: {0:.4f}".format(best_corr))
 
             experiment.end_time = datetime.now()
@@ -167,7 +181,12 @@ def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
             while iteration < time and temperature > 0:
                 new_candidate = convolve_gaussian(candidate, renderer._axes, .05)
                 
-                result = systematicity.evaluate(chars, font, font_size, new_candidate)
+                try:
+                    result = systematicity.evaluate(chars, font, font_size, new_candidate)
+                except FailedRenderException:
+                    # ignore failed render and carry on to a new candidate
+                    continue
+
                 save_result(experiment.id, result)
                 new_corr = result.edit_correlation
                 
