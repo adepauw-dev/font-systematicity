@@ -82,7 +82,7 @@ def grid_search(chars, fonts, font_sizes, grid_count):
                     
                     try:
                         result = systematicity.evaluate(chars, font, font_size, coords)
-                    except FailedRenderException:
+                    except systematicity.FailedRenderException:
                         # ignore failed render and carry on
                         print("Failed render at point {0}".format(coords))
                         continue
@@ -179,11 +179,11 @@ def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
             print("Starting at {0}, {1}".format(best_candidate, best_corr))
 
             while iteration < time and temperature > 0:
-                new_candidate = convolve_gaussian(candidate, renderer._axes, .05)
+                new_candidate = convolve_gaussian(candidate, renderer._axes, .10)
                 
                 try:
                     result = systematicity.evaluate(chars, font, font_size, new_candidate)
-                except FailedRenderException:
+                except systematicity.FailedRenderException:
                     # ignore failed render and carry on to a new candidate
                     continue
 
