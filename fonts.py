@@ -52,3 +52,4 @@ def load_fonts(font_dir):
 if __name__ == "__main__":
     load_fonts(r"C:\Windows\Fonts")
     load_fonts(r"data\variable-fonts")
+    load_fonts(r"data\chinese-fonts")

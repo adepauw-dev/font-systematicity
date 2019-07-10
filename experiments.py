@@ -11,9 +11,20 @@ import shapes
 import systematicity
 
 class ExperimentType(Enum):
+    DefaultSystematicity = "default"
     GridSearch = "grid"
     RandomSearch = "random"
     SimulatedAnnealing = "simulated annealing"
+
+
+random_seed = None
+
+"""
+    Method for setting initial seed for when repeatable experiments
+    are desired.
+"""
+def set_random_seed(seed):
+    random_seed = seed
 
 """
     Evaluate the systematicity in sound-shape correlation for a set of fonts
@@ -66,6 +77,8 @@ def grid_search(chars, fonts, font_sizes, grid_count):
                 hyperparameters = json.dumps({"facets":grid_count}))
             experiment.save()
             print(experiment_name)
+
+            random.seed(random_seed)
         
             renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
             defaults = [axis.default for axis in renderer._axes]
@@ -117,6 +130,8 @@ def random_search(chars, fonts, font_sizes, num_points):
             experiment.save()
             print(experiment_name)
 
+            random.seed(random_seed)
+
             renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
 
             points = get_random_coords(renderer._axes, num_points)
@@ -150,21 +165,24 @@ def random_search(chars, fonts, font_sizes, num_points):
 """
    Simulated annealing algorithm for finding optimal coordinates. 
 """
-def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
+def simulated_annealing(chars, fonts, font_sizes, init_temp, time, alter_type, alter_range):
     for font in fonts:
         for font_size in font_sizes:
-            experiment_name = "Simulated Annealing: {0} size {1}, initial temp {2}, {3} iterations.".format(font.name, font_size, initial_temperature, time)
+            experiment_name = "Simulated Annealing: {0} size {1}, initial temp {2}, {3} iterations.".format(font.name, font_size, init_temp, time)
             experiment = Experiment(
                 name = experiment_name,
                 method = ExperimentType.SimulatedAnnealing,
                 start_time = datetime.now(),
-                hyperparameters = json.dumps({"temp":initial_temperature, "iterations":time}))
+                hyperparameters = json.dumps({"temp":init_temp, "iterations":time, "alteration_type":alter_type, "alteration_range":alter_range}))
             experiment.save()
+            
+            random.seed(random_seed)
 
             print(experiment_name)
-            temperature = initial_temperature
+            temperature = init_temp
             renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
-            candidate = get_random_coords(renderer._axes, 1)[0]
+            #candidate = get_random_coords(renderer._axes, 1)[0]
+            candidate = [axis.default for axis in renderer._axes]
             
             result = systematicity.evaluate(chars, font, font_size, candidate)
             save_result(experiment.id, result)
@@ -179,7 +197,10 @@ def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
             print("Starting at {0}, {1}".format(best_candidate, best_corr))
 
             while iteration < time and temperature > 0:
-                new_candidate = convolve_gaussian(candidate, renderer._axes, .10)
+                if alter_type == "gaussian":
+                    new_candidate = alter_gaussian(candidate, renderer._axes, alter_range)
+                else:
+                    new_candidate = alter_uniform(candidate, renderer._axes, alter_range)
                 
                 try:
                     result = systematicity.evaluate(chars, font, font_size, new_candidate)
@@ -205,18 +226,54 @@ def simulated_annealing(chars, fonts, font_sizes, initial_temperature, time):
                     best_iteration = iteration
 
                 iteration += 1
-                temperature = initial_temperature * (1 - iteration/time)
+                temperature = init_temp * (1 - iteration/time)
     
             print("Best candidate for {0} size {1} in iteration {2}: {3:.4f}, {4}".format(font.name, font_size, best_iteration, best_corr, best_candidate))
             
             experiment.end_time = datetime.now()
             experiment.save()
 
+def default_systematicity(chars, fonts, font_sizes):
+    for font in fonts:
+        for font_size in font_sizes:
+            with data.db.atomic():
+                experiment_name = "Default: {0} size {1}.".format(font.name, font_size)
+                experiment = Experiment(
+                    name = experiment_name,
+                    method = ExperimentType.DefaultSystematicity,
+                    start_time = datetime.now(),
+                    hyperparameters = None)
+                experiment.save()
+                print(experiment_name)
+
+                renderer = shapes.GlyphRenderer(io.BytesIO(font.font_file))
+                defaults = [axis.default for axis in renderer._axes]
+
+                try:
+                    result_implicit = systematicity.evaluate(chars, font, font_size, coords=None)
+                    result_explicit = systematicity.evaluate(chars, font, font_size, coords=defaults)
+                except systematicity.FailedRenderException:
+                    print("Unable to determine systematicity for {0} pt {1} because at least one glyph failed to render."
+                        .format(font_size, font.name))
+                    continue
+
+                save_result(experiment.id, result_implicit)
+                save_result(experiment.id, result_explicit)
+
+                print("Corr: {0:.4f} for {1} pt {2} with implicit default coords.".format(
+                        result_implicit.edit_correlation, font_size, font.name))
+                print("Corr: {0:.4f} for {1} pt {2} with explicit default coords {3}...".format(
+                        result_explicit.edit_correlation, font_size, font.name, defaults))
+                
+                experiment.end_time = datetime.now()
+                experiment.save()
+            
+
 """
-    Randomly convolve the set of axis coordinates uniformly bounded by the 
+    Randomly alter the set of axis coordinates uniformly bounded by the 
     +/- percent of possible range defined by step_range.
 """
-def convolve_uniform(coords, axes, step_range):
+def alter_uniform(coords, axes, step_range):
     if step_range > 1 or step_range <= 0:
         raise Exception("Invalid step_range: {0}. Should be 0 < step_range <= 1.".format(step_range))
 
@@ -239,19 +296,19 @@ def convolve_uniform(coords, axes, step_range):
     return new_coords
 
 """
-    Randomly convolve the set of axis coordinates within the applicable range
+    Randomly alter the set of axis coordinates within the applicable range
     using a Gaussian distribution having zero mean. The variance will be set
     to the portion of the axis range specified by var_range. For example, a
     var_range of 0.01 for axes with ranges of [20, 80, 100] will yield 
     variances of [0.2, 0.8, 1].
 """
-def convolve_gaussian(coords, axes, var_range):
+def alter_gaussian(coords, axes, var_range):
     if var_range <= 0:
         raise Exception("Invalid var_range: {0}. var_range should be > 0"
             .format(var_range))
     if var_range > 1:
         raise Warning("Unusally high var_range of {0} will result in many "
-                        "rejected convolutions outside the axis range."
+                        "rejected alterations outside the axis range."
                         .format(var_range))
     new_coords = []
     
@@ -278,18 +335,3 @@ def save_result(experiment_id, systematicity_result):
 if __name__ == "__main__":
     font = Font.select().where(Font.name == 'amstelvar-roman').first()
     renderer = shapes.GlyphRenderer(font.font_file)
-
-
-    ### CONVOLVE TESTING
-
-    # coords = []
-    # for axis in renderer._axes:
-    #     print(axis.name, axis.minimum, axis.maximum)
-    #     coords.append(axis.default)
-    # print(coords)
-
-    # step_range = 1
-    # for i in range(100):
-    #     # coords = convolve_uniform(coords, renderer._axes, step_range)    
-    #     coords = convolve_gaussian(coords, renderer._axes, 0.10)
-    #     print(coords)
