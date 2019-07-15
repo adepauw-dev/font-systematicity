@@ -3,6 +3,7 @@ from itertools import combinations
 import json
 from typing import NamedTuple
 
+import numpy as np
 from scipy.stats.stats import pearsonr
 from peewee import DoesNotExist
 
@@ -39,7 +40,7 @@ def delete_glyph_set(chars, font, size, coords=None):
     exist, a new glyphset is created and glyphs are rendered and saved.
 """
 def get_glyphs(chars, font, size, coords=None):
-    coords_serial = json.dumps(coords)
+    coords_serial = None if (coords is None or len(coords) == 0) else json.dumps(coords)
     chars_serial = json.dumps(chars)
     
     # Check if glyphs already exist    
@@ -111,8 +112,9 @@ def get_shape_distances(glyph_set_id):
         glyph_2 = glyphs[j]
         bitmap_1 = glyph_1.bitmap
         bitmap_2 = glyph_2.bitmap
-        
+
         haus = shapes.hausdorff_distance(bitmap_1, bitmap_2)
+
         if haus is None:
             raise FailedRenderException("Unable to determine distance and correlation because at least one glyph failed to render.")
 
@@ -176,6 +178,10 @@ def get_correlation(glyph_set_id, sound_metric, shape_metric):
     if (len(sound_distances) != len(shape_distances)):
         raise Exception("Numer of shape ({0}) and sound ({1}) distances are not equal for glyph set {2}, sound metric {3}, shape metric {4}".format(
             len(shape_distances), len(sound_distances), glyph_set_id, sound_metric, shape_metric))
+    
+    if np.std(shape_distances) == 0:
+        raise Exception("Unable to calculate correlation for glyph set {0}: standard deviation of shape distances is zero."
+            .format(glyph_set_id))
     
     corr_value = pearsonr(shape_distances, sound_distances)
 

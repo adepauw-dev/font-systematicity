@@ -250,20 +250,16 @@ def default_systematicity(chars, fonts, font_sizes):
                 defaults = [axis.default for axis in renderer._axes]
 
                 try:
-                    result_implicit = systematicity.evaluate(chars, font, font_size, coords=None)
-                    result_explicit = systematicity.evaluate(chars, font, font_size, coords=defaults)
+                    result = systematicity.evaluate(chars, font, font_size, coords=None)
                 except systematicity.FailedRenderException:
                     print("Unable to determine systematicity for {0} pt {1} because at least one glyph failed to render."
                         .format(font_size, font.name))
                     continue
 
-                save_result(experiment.id, result_implicit)
-                save_result(experiment.id, result_explicit)
+                save_result(experiment.id, result)
 
-                print("Corr: {0:.4f} for {1} pt {2} with implicit default coords.".format(
-                        result_implicit.edit_correlation, font_size, font.name))
-                print("Corr: {0:.4f} for {1} pt {2} with explicit default coords {3}...".format(
-                        result_explicit.edit_correlation, font_size, font.name, defaults))
+                print("Corr: {0:.4f} for {1} pt {2}.".format(
+                        result.edit_correlation, font_size, font.name))
                 
                 experiment.end_time = datetime.now()
                 experiment.save()
@@ -329,6 +325,17 @@ def alter_gaussian(coords, axes, var_range):
     return new_coords
 
 def save_result(experiment_id, systematicity_result):
+    join = (ExperimentGlyphSet
+            .select()
+            .where(
+                (ExperimentGlyphSet.experiment_id == experiment_id) &
+                (ExperimentGlyphSet.glyph_set_id == systematicity_result.glyph_set_id))
+            .first())
+
+    # Don't duplicate if we're using cached result
+    if join is not None:
+        return
+
     join = ExperimentGlyphSet(experiment_id=experiment_id, glyph_set_id=systematicity_result.glyph_set_id)
     join.save()
 
