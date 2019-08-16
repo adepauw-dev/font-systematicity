@@ -7,8 +7,9 @@ import numpy as np
 from ft_structs_mm import FT_MM_VarPtr
 from distance import HaussdorffDistance
 
-# Factor for integer/16-bit fixed point number conversion
-FIXED_16_BIT = 65536
+# Factors for integer/fixed point float conversions
+FIXED_POINT_16_16 = 65536   # 16.16 fixed point
+FIXED_POINT_26_6 = 64       # 26.6 fixed point
 
 """
     Renders monochrome bitmap glyphs and associated metrics using the FreeType
@@ -29,11 +30,11 @@ class GlyphRenderer:
                     break
 
                 font_axis = FontAxis(
-                    axis.name.decode('utf-8'), axis.tag, axis.minimum/FIXED_16_BIT, axis.maximum/FIXED_16_BIT, getattr(axis, 'def')/FIXED_16_BIT)
+                    axis.name.decode('utf-8'), axis.tag, axis.minimum/FIXED_POINT_16_16, axis.maximum/FIXED_POINT_16_16, getattr(axis, 'def')/FIXED_POINT_16_16)
                 self._axes.append(font_axis)
     
     """
-        Renders a monochrome characer bitmap using the specified size and optional 
+        Renders a monochrome character bitmap using the specified size and optional 
         variable font coordinates.
     """
     def bitmap(self, char, size, coords):
@@ -58,10 +59,11 @@ class GlyphRenderer:
         coordinates.
     """
     def configure_font(self, size, coords):
-        self._face.set_char_size(size*64)
+        # Size argument is a 26.6 fixed float, so we multiple by 2^6
+        self._face.set_char_size(size*FIXED_POINT_26_6)
         
         if coords is not None:
-            fixed = [int(coord*FIXED_16_BIT) for coord in coords]
+            fixed = [int(coord*FIXED_POINT_16_16) for coord in coords]
             coords_type = freetype.FT_Fixed * len(fixed)
             ft_coords = coords_type(*fixed)
             freetype.FT_Set_Var_Design_Coordinates(self._face._FT_Face, len(fixed), ft_coords)
@@ -83,10 +85,10 @@ class GlyphRenderer:
         
         return GlyphBitmap(
             bitmap = np.array(data).reshape(bitmap.rows, bitmap.width),
-            height = int(metrics.height/64), 
-            width = int(metrics.width/64),
-            y_bearing = int(metrics.horiBearingY/64), 
-            x_bearing = int(metrics.horiBearingX)/64)      
+            height = int(metrics.height/FIXED_POINT_26_6), 
+            width = int(metrics.width/FIXED_POINT_26_6),
+            y_bearing = int(metrics.horiBearingY/FIXED_POINT_26_6), 
+            x_bearing = int(metrics.horiBearingX)/FIXED_POINT_26_6)      
 
     """
         Converts monochrome pixel values from a byte of bits to a list of ints.

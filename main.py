@@ -1,6 +1,7 @@
 import io
 import json
 import random
+from collections import defaultdict
 
 import data
 from data import Font, GlyphSet, Glyph, SoundDistance, ShapeDistance, Correlation
@@ -65,23 +66,34 @@ def get_chinese_distances():
         glyph_set_id = systematicity.get_glyphs(chars, font, 96)
         distances = systematicity.get_shape_distances(glyph_set_id)
 
+def axes_analysis():
+    fonts = Font.select().where(
+        (Font.is_variable == True)
+    )
+    axis_count = defaultdict(int)
+    axis_sum = defaultdict(int)
+    
+    for font in fonts:
+        axes = json.loads(font.axes)["axes"]
+        axis_sum[len(axes)] += 1
 
+        for axis in axes:
+            axis_count[axis["name"]] += 1
+        
+    print(axis_count)
+    print(axis_sum)    
 
-if __name__ == "__main__":    
+if __name__ == "__main__":   
     chars = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u", "v", "w", "y", "z"]
     data.db.connect()
-    fonts = Font.select().where(
-        (Font.is_variable == True) &
-        (Font.name == "Amstelvar Roman"))
+
+    fonts = Font.select().where(Font.is_variable == True)
     
-    """ Calculate correlation of fonts using default coordinates """
-    experiments.default_systematicity(chars, fonts, [24])
+    # # """ Calculate systematicity of fonts using default coordinates """
+    # experiments.default_systematicity(chars, fonts, [12])
+   
+    # """  Run an experiment using simulated annealing to minimize """ 
+    #experiments.simulated_annealing(chars, fonts, [24], .02, 500, "gaussian", 0.1, method=experiments.ExperimentType.SimulatedAnnealingMin)
     
-    """  Run an experiment using simulated annealing """ 
-    experiments.simulated_annealing(chars, fonts, [12, 24], .02, 500)
-    
-    """  Run an experiment using random search """ 
-    experiments.random_search(chars, fonts, [12, 24], 250)
-    
-    """ Run an experiment using grid search """
-    experiments.grid_search(chars, fonts, [12, 24], 5)
+    # """  Run an experiment using simulated annealing """ 
+    # experiments.simulated_annealing(chars, fonts, [12, 24], .02, 500)

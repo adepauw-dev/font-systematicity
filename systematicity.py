@@ -80,7 +80,7 @@ def get_glyphs(chars, font, size, coords=None):
     of glyphs belonging to the specified set. If the calculations already 
     exist, the existing records are returned.
 """
-def get_shape_distances(glyph_set_id):
+def get_and_save_shape_distances(glyph_set_id):
     glyph_query = Glyph.select().where(Glyph.glyph_set_id == glyph_set_id)
     glyphs = [glyph for glyph in glyph_query]
 
@@ -100,6 +100,14 @@ def get_shape_distances(glyph_set_id):
         # distances already calculated, return existing values
         return [s for s in shape_query]
 
+    shape_distances = get_shape_distances(glyphs)
+    
+    with data.db.atomic():
+        ShapeDistance.bulk_create(shape_distances, batch_size=100)
+    
+    return shape_distances
+
+def get_shape_distances(glyphs):
     shape_distances = []
 
     # Generate all pairs of chars and calculate distance
@@ -131,9 +139,6 @@ def get_shape_distances(glyph_set_id):
         )
 
         shape_distances.append(s)
-    
-    with data.db.atomic():
-        ShapeDistance.bulk_create(shape_distances, batch_size=100)
     
     return shape_distances
 
@@ -210,7 +215,7 @@ def evaluate(chars, font, font_size, coords=None, overwrite=False):
     
     glyph_set_id = get_glyphs(chars, font, font_size, coords)
 
-    get_shape_distances(glyph_set_id)
+    get_and_save_shape_distances(glyph_set_id)
 
     euclidean_corr = get_correlation(glyph_set_id, "Euclidean", "hausdorff")
     edit_sum_corr = get_correlation(glyph_set_id, "Edit_Sum", "hausdorff")

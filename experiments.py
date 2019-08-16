@@ -14,7 +14,8 @@ class ExperimentType(Enum):
     DefaultSystematicity = "default"
     GridSearch = "grid"
     RandomSearch = "random"
-    SimulatedAnnealing = "simulated annealing"
+    SimulatedAnnealing = "simulated annealing",
+    SimulatedAnnealingMin = "simulated annealing minimize"
 
 
 random_seed = None
@@ -165,13 +166,16 @@ def random_search(chars, fonts, font_sizes, num_points):
 """
    Simulated annealing algorithm for finding optimal coordinates. 
 """
-def simulated_annealing(chars, fonts, font_sizes, init_temp, time, alter_type, alter_range):
+def simulated_annealing(chars, fonts, font_sizes, init_temp, time, alter_type="gaussian", alter_range="0.1", method=ExperimentType.SimulatedAnnealing):
+    if method not in [ExperimentType.SimulatedAnnealing, ExperimentType.SimulatedAnnealingMin]:
+        raise("Method must be one of the simulated annealing types")
+
     for font in fonts:
         for font_size in font_sizes:
             experiment_name = "Simulated Annealing: {0} size {1}, initial temp {2}, {3} iterations.".format(font.name, font_size, init_temp, time)
             experiment = Experiment(
                 name = experiment_name,
-                method = ExperimentType.SimulatedAnnealing,
+                method = method,
                 start_time = datetime.now(),
                 hyperparameters = json.dumps({"temp":init_temp, "iterations":time, "alteration_type":alter_type, "alteration_range":alter_range}))
             experiment.save()
@@ -211,16 +215,22 @@ def simulated_annealing(chars, fonts, font_sizes, init_temp, time, alter_type, a
                 save_result(experiment.id, result)
                 new_corr = result.edit_correlation
                 
+                delta = new_corr - corr
+                if method == ExperimentType.SimulatedAnnealingMin:
+                    delta = -(delta)
+
                 p = random.uniform(0.0, 1.0)
-                if new_corr > corr or math.exp((new_corr - corr)/temperature) > p:
-                    print("{0:3d} MOVE: {1:.4f}, {2:.4f} > {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp((new_corr - corr)/temperature), p, temperature, new_candidate))
+                
+                if math.exp(delta/temperature) > p:
+                    print("{0:3d} MOVE: {1:.4f}, {2:.4f} > {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp(delta/temperature), p, temperature, new_candidate))
                     
                     candidate = new_candidate
                     corr = new_corr                
                 else:
-                    print("{0:3d} STAY: {1:.4f}, {2:.4f} <= {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp((new_corr - corr)/temperature), p, temperature, new_candidate))
+                    print("{0:3d} STAY: {1:.4f}, {2:.4f} <= {3:.4f}, temp: {4:.4f}, {5}".format(iteration, new_corr, math.exp(delta/temperature), p, temperature, new_candidate))
 
-                if corr > best_corr:                    
+                if ((method == ExperimentType.SimulatedAnnealing and corr > best_corr) or
+                   (method == ExperimentType.SimulatedAnnealingMin and corr < best_corr)):                    
                     best_corr = corr
                     best_candidate = candidate
                     best_iteration = iteration
